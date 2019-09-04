@@ -1,0 +1,221 @@
+/*
+* Test Comments
+*/
+
+Package minipython;
+
+Helpers
+	digit = ['0' .. '9'];
+	letter = ['a' .. 'z']|['A' .. 'Z'];
+	cr = 13;
+	lf = 10;
+	space = 32;
+	all = [0..127];
+	eol = lf | cr | cr lf ;
+	hashtag = '#';
+	squote = ''';
+	escape = '\';
+	quote = '"';
+	tquote = quote quote quote;
+	dot = '.';
+	underscore = '_';
+	not_eol = [all - [cr + [lf + [squote + quote]]]];
+
+Tokens
+	tab = 9;
+	plusequal = '+=';
+	plus = '+';
+	minusequal = '-=';
+	minus = '-';
+	power='**';
+	mulequal = '*=';
+	mult = '*';
+	divequal = '/=';
+	div = '/';
+	eq2 = '==';
+	eq = '=';
+	dot2 = '.';
+	diff = '!=';
+	exclam = '!';
+	dictt = 'dict';
+	def = 'def';
+	logic_plus = '&&';
+	l_par = '(';
+	r_par = ')';
+	l_br = '[';
+	r_br = ']';
+	comma = ',';
+	qmark = '?';
+	gqmark = ';';
+	as = 'as';
+	in = 'in';
+	if = 'if';
+	elif = 'elif';
+	else = 'else';
+	for = 'for';
+	print = 'print';
+	return = 'return';
+	assert = 'assert';
+	import = 'import';
+	from = 'from';
+	while = 'while';
+	less_equal = '<=';
+	great_equal = '>=';
+	less = '<';
+	great = '>';
+	true = 'true';
+	semi = ':';
+	false = 'false';
+	blank = (space | eol);
+	line_comment = hashtag not_eol* eol;
+	hard_comment = tquote all* tquote;
+	integer = ('-') ? digit+;
+	decimal = ('-') ? (digit+ | (digit+ dot digit+));
+	id = (underscore)* letter (letter | digit | underscore)*;
+	characters = squote not_eol* squote;
+	string = quote not_eol* quote;
+
+Ignored Tokens
+	blank,line_comment,hard_comment;
+
+Productions
+    program = goal* {-> New program([goal])};
+
+    goal = {statement} statement {-> New goal.statement(statement)} |
+            {function} function {-> New goal.function(function)};
+
+    function = def id l_par argument_list? r_par semi statement
+                {-> New function(id, [argument_list.argument], statement)};
+
+    argument_list{-> argument*} = argument argument_list_tail*
+                    {-> [argument argument_list_tail.argument]};
+
+    argument_list_tail{-> argument} = comma argument{-> argument};
+
+    argument = {simple_argument} id {-> New argument.simple_argument(id)} |
+                {arg_with_value} id eq value {-> New argument.arg_with_val(id, value)};
+
+    statement   =   {if}tab* if comparison semi statement {-> New statement.if(comparison, statement)}|
+                    {while}tab* while comparison semi statement {-> New statement.while(comparison, statement)}|
+                    {for}tab* for [r_id]:id in [l_id]:id semi statement {-> New statement.for(r_id, l_id, statement)}|
+                    {return}tab* return expression {-> New statement.return(expression)} |
+                    {print}tab* print expression exp_list_tail* {-> New statement.print(expression, [exp_list_tail.expression])} |
+                    {assign}tab* id eq expression {-> New statement.assign(id, expression)} |
+                    {minuseq}tab* id minusequal expression {-> New statement.minuseq(id, expression)} |
+                    {divequal}tab* id divequal expression {-> New statement.diveq(id, expression)} |
+                    {array}tab* id l_br [l_exp]:expression r_br eq [r_exp]:expression {-> New statement.array(id, l_exp, r_exp)} |
+                    {function_call}tab* function_call {-> New statement.function_call(function_call)} |
+                    {assert}tab* assert expression exp_list_tail? {-> New statement.assert(expression, [exp_list_tail.expression])} |
+		    {import} import module module_list_tail* {-> New statement.import(module, [module_list_tail.module])} |
+                    {from} from module import as_id_from_rename id_from_list* {-> New statement.from(module, [as_id_from_rename.id id_from_list.id])} ;
+
+    as_id_from_rename{-> id*} = id as_id_from? {->[id as_id_from.id]} ;
+
+    as_id_from{-> id} = as id{-> id};
+
+    id_from_list{-> id} = comma as_id_from_rename{-> as_id_from_rename.id};
+
+    module_list_tail{-> module*} = comma module {-> [module]} ;
+
+    module = {without_rename} identifier_list* id {-> New module([identifier_list.id], id, Null)} |
+                {rename} identifier_list* [l]:id as [r]:id {-> New module([identifier_list.id], l, r)};
+
+    identifier_list{-> id*} = id dot2{-> [id]};
+
+    exp_list_tail{-> expression*} = comma expression{-> [expression]};
+
+    expression = {multiplication} multiplication {-> multiplication.expression}|
+                 {addition} expression plus multiplication {-> New expression.addition(expression, multiplication.expression)} |
+                 {substraction} expression minus multiplication {-> New expression.substraction(expression, multiplication.expression)} ;
+
+    multiplication{-> expression} = {dynamh} dynamh {-> dynamh.expression} |
+                     {multiplication} multiplication mult dynamh {-> New expression.multiplication(multiplication.expression, dynamh.expression)} |
+                     {division} multiplication div dynamh {-> New expression.division(multiplication.expression, dynamh.expression)} ;
+
+    dynamh{-> expression} = {something} something {-> something.expression} |
+             {exponentiation} dynamh power something {-> New expression.exponentiation(dynamh.expression, something.expression)} ;
+
+    something{-> expression } = {id} id {-> New expression.identifier(id) }|
+                {value} value {-> New expression.value(value) } |
+                {array} id l_br expression r_br {-> New expression.array(id, expression) } |
+                {funccall} function_call {-> New expression.funccall(function_call) } |
+                {parexp} l_par expression r_par {-> expression } |
+                {valuelist} l_br value_list r_br {-> New expression.list([value_list.value])} ;
+
+    value_list{-> value* } = value value_list_tail* {-> [value value_list_tail.value]};
+
+    value_list_tail{-> value } = comma value {-> value };
+
+    function_call = id l_par arg_list? r_par {-> New function_call(id, [arg_list.expression])} ;
+
+    arg_list{-> expression*} = expression arg_list_tail* {-> [expression arg_list_tail.expression]} ;
+
+    arg_list_tail{-> expression} = comma expression {-> expression} ;
+
+    value = {idfunccall} id dot2 function_call {-> New value.idfunccall(id, function_call) } |
+            {number} integer {-> New value.number(integer) } |
+            {string} string {-> New value.string(string) } |
+            {decimal} decimal {-> New value.decimal(decimal)} |
+            {characters} characters {-> New value.characters(characters) } ;
+
+    comparison = {greater} [l_exp]:expression great [r_exp]:expression {-> New comparison.greater(l_exp, r_exp)} |
+                 {less} [l_exp]:expression less [r_exp]:expression {-> New comparison.less(l_exp, r_exp)} |
+                 {not_eq} [l_exp]:expression diff [r_exp]:expression {-> New comparison.not_eq(l_exp, r_exp)} |
+                 {eq} [l_exp]:expression eq [r_exp]:expression {-> New comparison.eq(l_exp, r_exp)} |
+                 {true} true {-> New comparison.true()}|
+                 {false} false {-> New comparison.false()} ;
+
+
+Abstract Syntax Tree
+
+    program = goal*;
+
+    goal = {statement} statement |
+            {function} function;
+
+    function = id argument* statement;
+
+    argument = {simple_argument} id |
+                {arg_with_val} id value;
+
+    statement = {if} comparison statement |
+                {while} comparison statement |
+                {for} [r_id]:id [l_id]:id statement |
+                {return} expression |
+                {print} [l]:expression [r]:expression* |
+                {assign} id expression |
+                {minuseq} id expression |
+                {diveq} id expression |
+                {array} id [l_exp]:expression [r_exp]:expression |
+                {function_call} function_call |
+                {assert} [l]:expression [r]:expression* |
+                {import} [l]:module [r]:module* | 
+                {from} module id* ;
+
+    module = [l]:id* [m]:id [r]:id ;
+
+    expression = {addition} [l_exp]:expression [r_exp]:expression |
+                    {substraction} [l_exp]:expression [r_exp]:expression |
+                    {multiplication} [l_exp]:expression [r_exp]:expression |
+                    {division} [l_exp]:expression [r_exp]:expression |
+                    {exponentiation} [l_exp]:expression [r_exp]:expression |
+                    {identifier} id |
+                    {value} value |
+                    {array} id expression |
+                    {funccall} function_call |
+                    {list} value* ;
+
+    value = {idfunccall} id function_call |
+                {number} integer |
+                {string} string |
+                {decimal} decimal |
+                {characters} characters ;
+
+    function_call = id expression*;
+
+    comparison = {greater} [l_exp]:expression [r_exp]:expression |
+                    {less} [l_exp]:expression [r_exp]:expression |
+                    {not_eq} [l_exp]:expression [r_exp]:expression |
+                    {eq} [l_exp]:expression [r_exp]:expression |
+                    {true} |
+                    {false} ;
